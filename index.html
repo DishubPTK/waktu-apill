@@ -179,6 +179,12 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 /* Remove grid card bottom padding when no badges */
 .grid-card{padding-bottom:14px}
 
+/* ── LAST UPDATED BAR ── */
+.last-update-bar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:11px 14px;box-shadow:var(--shadow);color:var(--text2)}
+.last-update-icon{font-size:1rem;flex-shrink:0}
+.last-update-lbl{font-size:.72rem;font-weight:600;color:var(--muted);flex:1}
+.last-update-val{font-size:.82rem;font-weight:700;color:var(--navy)}
+
 /* ── SG DESCRIPTIONS ── */
 .sg-desc-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
 .sg-desc-item{text-align:center;padding:10px 8px;background:var(--accent-light);border-radius:9px;border:1.5px solid #93c5fd}
@@ -538,7 +544,7 @@ function gv(row,idx){
 function processData(rows){
   allData=[];
   if(!rows||rows.length<3)return;
-  let hRow=-1,cL=0,cJN=2,cJM=3,cJS=4,cDN=12,cDS=16,cAR=-1,cKu=-1;
+  let hRow=-1,cL=0,cJN=2,cJM=3,cJS=4,cDN=12,cDS=16,cAR=-1,cKu=-1,cLU=-1;
   for(let ri=0;ri<Math.min(5,rows.length);ri++){
     for(let ci=0;ci<rows[ri].length;ci++){
       if((rows[ri][ci]||'').toString().trim().toLowerCase()==='lokasi'){hRow=ri;cL=ci;break;}
@@ -550,6 +556,7 @@ function processData(rows){
       const c=(cell||'').toString().trim().toLowerCase();
       if(c==='jam normal')cJN=ci;if(c==='jam malam')cJM=ci;
       if(c==='jam sibuk 1')cJS=ci;if(c==='all red')cAR=ci;if(c==='kuning')cKu=ci;
+      if(c.includes('terakhir')||c.includes('diperbarui')||c.includes('updated'))cLU=ci;
     });
     if(hRow>0){
       rows[hRow-1].forEach((cell,ci)=>{
@@ -608,7 +615,7 @@ function processData(rows){
     }
   }
 
-  const cm={cL,cJN,cJM,cJS,cDN,cDS,cAR,cKu,cSG};
+  const cm={cL,cJN,cJM,cJS,cDN,cDS,cAR,cKu,cSG,cLU};
   for(let i=ds;i<rows.length;i++){
     const r=rows[i];if(!r||!r.length)continue;
     const lokasi=gv(r,cL);if(!lokasi||lokasi.toLowerCase()==='lokasi')continue;
@@ -617,7 +624,7 @@ function processData(rows){
     const dS=[];for(let s=0;s<MAX_SIBUK;s++)dS.push([0,1,2,3].map(j=>gv(r,cDS+s*4+j)));
     // SG descriptions per simpang
     const sgDesc=cSG.map(ci=>ci>=0?gv(r,ci):'');
-    allData.push({rowIndex:i+1,lokasi,jamNormal:fmtTime(gv(r,cJN)),jamMalam:fmtTime(gv(r,cJM)),jamSibuk,dN,dS,allRed:cAR>=0?gv(r,cAR):'',kuning:cKu>=0?gv(r,cKu):'',sgDesc,rawRow:[...r],cm});
+    allData.push({rowIndex:i+1,lokasi,jamNormal:fmtTime(gv(r,cJN)),jamMalam:fmtTime(gv(r,cJM)),jamSibuk,dN,dS,allRed:cAR>=0?gv(r,cAR):'',kuning:cKu>=0?gv(r,cKu):'',sgDesc,lastUpdate:cLU>=0?gv(r,cLU):'',rawRow:[...r],cm});
   }
   filteredData=[...allData];
   document.getElementById('hdrN').textContent=allData.length;
@@ -686,6 +693,12 @@ function renderDetail(){
     h+=`<div class="allred-row"><div class="allred-item"><div class="allred-lbl">All Red</div><div class="allred-val">${d.allRed||'—'}</div></div><div class="allred-item"><div class="allred-lbl">Kuning</div><div class="allred-val kuning-val">${d.kuning||'—'}</div></div></div>`;
   }
   h+=`</div></div>`;
+  // Last updated bar - bottom of page
+  h+=`<div class="last-update-bar">
+    <span class="last-update-icon">🕐</span>
+    <span class="last-update-lbl">Terakhir Diperbarui</span>
+    <span class="last-update-val" id="lastUpdateVal">${d.lastUpdate||'—'}</span>
+  </div>`;
   document.getElementById('detailBody').innerHTML=h;
 }
 
@@ -784,6 +797,11 @@ async function saveEdit(){
   for(let s=0;s<cnt;s++)for(let i=0;i<4;i++){const el=document.getElementById('ef_dS'+s+'_'+i);if(el)set(cm.cDS+s*4+i,el.value);}
   set(cm.cAR,document.getElementById('ef_ar')?.value||'');
   set(cm.cKu,document.getElementById('ef_ku')?.value||'');
+  // Auto-update "Terakhir Diperbarui" with today's date (DD/MM/YYYY)
+  const now=new Date();
+  const _bulan=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
+  const todayStr=String(now.getDate()).padStart(2,'0')+'-'+_bulan[now.getMonth()]+'-'+now.getFullYear();
+  if(cm.cLU>=0) set(cm.cLU, todayStr);
   const gi=allData.findIndex(r=>r.lokasi===d.lokasi);
   if(gi>=0){
     allData[gi].rawRow=nr;
@@ -795,6 +813,7 @@ async function saveEdit(){
     for(let s=0;s<MAX_SIBUK;s++)allData[gi].dS[s]=[0,1,2,3].map(j=>(nr[cm.cDS+s*4+j]||'').toString().trim());
     allData[gi].allRed=document.getElementById('ef_ar')?.value||'';
     allData[gi].kuning=document.getElementById('ef_ku')?.value||'';
+    allData[gi].lastUpdate=todayStr;
     currentSimpang=allData[gi];
   }
   closeModal();
