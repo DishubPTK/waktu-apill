@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clear Cache APILL</title>
+<style>
+body{font-family:sans-serif;background:#0f2557;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px}
+h2{margin-bottom:20px}
+p{opacity:.8;margin-bottom:30px;font-size:.9rem}
+button{background:#22c55e;color:white;border:none;padding:14px 28px;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;margin:8px}
+.red{background:#ef4444}
+</style>
+</head>
+<body>
+<h2>🧹 Clear Cache APILL</h2>
+<p>Klik tombol di bawah untuk membersihkan cache lama dan memuat ulang app dengan versi terbaru.</p>
+<button onclick="clearAll()">✅ Clear Cache & Reload</button>
+<button class="red" onclick="window.location='/waktu-apill/'">← Kembali ke App</button>
+<p id="status" style="margin-top:20px;font-size:.8rem"></p>
+<script>
+async function clearAll(){
+  document.getElementById('status').textContent = 'Membersihkan cache...';
+  // Unregister all service workers
+  if('serviceWorker' in navigator){
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for(let r of regs){ await r.unregister(); }
+  }
+  // Clear all caches
+  const keys = await caches.keys();
+  for(let k of keys){ await caches.delete(k); }
+  document.getElementById('status').textContent = 'Cache bersih! Mengalihkan ke app...';
+  setTimeout(()=>{ window.location='/waktu-apill/?nocache='+Date.now(); }, 1000);
+}
+</script>
+</body>
+</html>

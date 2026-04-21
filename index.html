@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0f2557">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="APILL">
 <meta name="mobile-web-app-capable" content="yes">
@@ -17,8 +20,8 @@
 <style>
 :root{--navy:#0f2557;--navy2:#1a3a7a;--navy3:#1e4799;--bg:#f0f4f8;--surface:#fff;--surface2:#f5f7fa;--border:#e2e8f0;--border2:#c8d4e8;--accent:#1e4799;--accent-light:#dce8fd;--green:#15803d;--green-bg:#dcfce7;--yellow:#b45309;--yellow-bg:#fef3c7;--red:#dc2626;--red-bg:#fee2e2;--text:#0f172a;--text2:#475569;--muted:#94a3b8;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 16px rgba(0,0,0,.12)}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{overscroll-behavior-y:contain}
-body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;overscroll-behavior-y:contain}
+html{overscroll-behavior-y:none;overscroll-behavior:none;height:100%}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;overscroll-behavior-y:none;overscroll-behavior:none}
 #loginScreen{position:fixed;inset:0;z-index:1000;background:linear-gradient(160deg,var(--navy),var(--navy2));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem}
 .login-icon{margin-bottom:12px;filter:drop-shadow(0 4px 16px rgba(0,0,0,0.4))}
 .login-logo{font-weight:800;font-size:2rem;color:#fff;letter-spacing:2px;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,0.3)}
@@ -912,23 +915,42 @@ function showToast(msg,isErr=false){
 }
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
-  // Disable pull-to-refresh on mobile
-  let lastTouchY = 0;
-  document.addEventListener('touchstart', e => { lastTouchY = e.touches[0].clientY; }, {passive:true});
+  // Disable pull-to-refresh on mobile — strong prevention
+  let _startY = 0;
+  document.addEventListener('touchstart', e => {
+    _startY = e.touches[0].pageY;
+  }, {passive: true});
   document.addEventListener('touchmove', e => {
-    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
-    const touchY = e.touches[0].clientY;
-    if (scrollTop <= 0 && touchY > lastTouchY) {
+    const el = e.target;
+    // Find scrollable parent
+    let scrollEl = el;
+    while (scrollEl && scrollEl !== document.body) {
+      const style = window.getComputedStyle(scrollEl);
+      const overflow = style.overflowY;
+      if (overflow === 'auto' || overflow === 'scroll') break;
+      scrollEl = scrollEl.parentElement;
+    }
+    const atTop = !scrollEl || scrollEl === document.body
+      ? (document.documentElement.scrollTop || document.body.scrollTop) <= 0
+      : scrollEl.scrollTop <= 0;
+    const movingDown = e.touches[0].pageY > _startY;
+    if (atTop && movingDown) {
       e.preventDefault();
     }
-  }, {passive:false});
+  }, {passive: false});
 
-  // Register Service Worker for PWA
+  // Register Service Worker for PWA — force update
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').then(reg=>{
+      // Force check for updates immediately
+      reg.update();
       console.log('SW registered:', reg.scope);
     }).catch(err=>{
       console.log('SW registration failed:', err);
+    });
+    // When new SW takes over, reload to get fresh content
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      console.log('SW updated, reloading...');
     });
   }
 });
