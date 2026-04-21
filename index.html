@@ -640,8 +640,7 @@ function openDetail(idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pgDetail').classList.add('active');
   window.scrollTo(0,0);
-  // Push 1 state for detail page (back will return to home)
-  history.pushState({page:'detail'}, '', '');
+  _fillBuffer();
 }
 
 function renderDetail(){
@@ -710,7 +709,7 @@ function _doOpenEdit(){
   document.getElementById('editModalSub').textContent=d.lokasi;
   buildForm(d);
   document.getElementById('editModal').classList.add('open');
-  history.pushState({page:'editModal'}, '', '');
+  _fillBuffer();
 }
 
 function buildForm(d){
@@ -852,7 +851,7 @@ function showEditPassModal(callback){
   document.getElementById('editPassInput').value='';
   document.getElementById('editPassErr').style.display='none';
   document.getElementById('editPassModal').classList.add('open');
-  history.pushState({page:'passModal'}, '', '');
+  _fillBuffer();
   setTimeout(()=>document.getElementById('editPassInput').focus(),300);
 }
 
@@ -901,88 +900,87 @@ function showToast(msg,isErr=false){
   setTimeout(()=>t.classList.remove('show'),2800);
 }
 // ── HARDWARE BACK BUTTON (Android PWA) ──────────────────
-// Strategy: Always maintain a "stack" of history entries on home page
-// so popstate fires instead of the app exiting directly.
+// Uses large history buffer to catch ALL back button presses in standalone mode
 let _backPressTime = 0;
 let _backPressTimer = null;
-let _isNavigatingBack = false;
+let _isHandlingBack = false;
+const BUFFER_SIZE = 30; // history entries to maintain as buffer
 
-// Repush multiple history states to buffer against exit
-function _pushHomeStates(count = 3) {
-  for (let i = 0; i < count; i++) {
-    history.pushState({page: 'home', i: i}, '', '');
+function _fillBuffer() {
+  // Push many states so back button always hits popstate before exiting
+  for (let i = 0; i < BUFFER_SIZE; i++) {
+    history.pushState({ apill: true, i: i }, '');
   }
 }
 
+// Override showPage to work with back navigation
 function showPage(name) {
   if (name === 'setup' && !canEdit) {
     showEditPassModal(() => showPage('setup'));
     return;
   }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const id = 'pg' + name.charAt(0).toUpperCase() + name.slice(1);
-  document.getElementById(id).classList.add('active');
+  document.getElementById('pg' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   window.scrollTo(0, 0);
   if (name === 'setup' && API_URL) document.getElementById('apiUrlInput').value = API_URL;
-
-  if (name === 'home') {
-    // On home: push multiple states as buffer
-    _pushHomeStates(3);
-  } else {
-    // On other pages: push 1 state so back returns home
-    history.pushState({page: name}, '', '');
-  }
+  // Always refill buffer after any navigation
+  _fillBuffer();
 }
 
-window.addEventListener('popstate', e => {
-  if (_isNavigatingBack) return;
-  const active = document.querySelector('.page.active');
-  if (!active) return;
-  const activePage = active.id;
+window.addEventListener('popstate', function(e) {
+  if (_isHandlingBack) return;
+  _isHandlingBack = true;
 
-  // ── If on detail/setup page → go back to home ──
-  if (activePage === 'pgDetail' || activePage === 'pgSetup') {
-    _isNavigatingBack = true;
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('pgHome').classList.add('active');
-    window.scrollTo(0, 0);
-    _pushHomeStates(3);
-    setTimeout(() => { _isNavigatingBack = false; }, 100);
-    return;
-  }
+  const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
 
-  // ── If modal open → close it ──
+  // Close modals first
   const passModal = document.getElementById('editPassModal');
   const editModal = document.getElementById('editModal');
   if (passModal && passModal.classList.contains('open')) {
     closeEditPassModal();
-    _pushHomeStates(3);
+    _fillBuffer();
+    _isHandlingBack = false;
     return;
   }
   if (editModal && editModal.classList.contains('open')) {
     closeModal();
-    _pushHomeStates(3);
+    _fillBuffer();
+    _isHandlingBack = false;
     return;
   }
 
-  // ── Home page: double-back-to-exit logic ──
-  const now = Date.now();
-  if (_backPressTime > 0 && now - _backPressTime < 700) {
-    // Second press within 0.7s → ALLOW EXIT
-    // Don't repush — let the history drain so app exits
-    _backPressTime = 0;
-    clearTimeout(_backPressTimer);
-    history.go(-10); // drain remaining history entries to force exit
+  // Navigate back from detail/setup to home
+  if (activePage === 'pgDetail' || activePage === 'pgSetup') {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('pgHome').classList.add('active');
+    window.scrollTo(0, 0);
+    _fillBuffer();
+    _isHandlingBack = false;
     return;
   }
-  // First press (or too slow) → show toast, repush buffer
+
+  // On home page: double-back-to-exit
+  const now = Date.now();
+  if (_backPressTime > 0 && (now - _backPressTime) < 700) {
+    // Second press within 0.7s → exit
+    _backPressTime = 0;
+    clearTimeout(_backPressTimer);
+    // Drain all history to actually exit
+    _isHandlingBack = false;
+    history.go(-(history.length));
+    return;
+  }
+
+  // First press → show toast, reset timer, refill buffer to block exit
   _backPressTime = now;
   clearTimeout(_backPressTimer);
   _backPressTimer = setTimeout(() => {
-    _backPressTime = 0; // reset if no second press within 0.7s
+    _backPressTime = 0; // reset after 0.7s — next back is first press again
   }, 700);
+
   showExitToast();
-  _pushHomeStates(3); // repush buffer to prevent exit
+  _fillBuffer(); // repush buffer to prevent exit
+  _isHandlingBack = false;
 });
 
 function showExitToast() {
@@ -994,11 +992,11 @@ function showExitToast() {
   setTimeout(() => { t.classList.remove('show'); t.style.background = ''; }, 1500);
 }
 
-// Push initial states on load
-_pushHomeStates(3);
 
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
+  // Fill initial history buffer for back button handling
+  _fillBuffer();
   // Disable pull-to-refresh on mobile — strong prevention
   let _startY = 0;
   document.addEventListener('touchstart', e => {
