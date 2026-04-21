@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0f2557">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="APILL">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Catatan Waktu APILL</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIj4KICA8IS0tIEJhY2tncm91bmQgY2lyY2xlIC0tPgogIDxjaXJjbGUgY3g9IjE2IiBjeT0iMTYiIHI9IjE1IiBmaWxsPSIjMGYyNTU3Ii8+CiAgPCEtLSBIb3VzaW5nIC0tPgogIDxyZWN0IHg9IjkiIHk9IjQiIHdpZHRoPSIxNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiMxMTE4MjciLz4KICA8cmVjdCB4PSI5IiB5PSI0IiB3aWR0aD0iMTQiIGhlaWdodD0iMjQiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4yKSIgc3Ryb2tlLXdpZHRoPSIwLjgiLz4KICA8IS0tIFJlZCBsaWdodCBPTiAtLT4KICA8Y2lyY2xlIGN4PSIxNiIgY3k9IjEwIiByPSI0IiBmaWxsPSIjZWY0NDQ0Ii8+CiAgPGNpcmNsZSBjeD0iMTQuNSIgY3k9IjguOCIgcj0iMS4yIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuNCkiLz4KICA8IS0tIFllbGxvdyBsaWdodCBPRkYgLS0+CiAgPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iNCIgZmlsbD0iIzNkMmUwMCIvPgogIDwhLS0gR3JlZW4gbGlnaHQgT04gLS0+CiAgPGNpcmNsZSBjeD0iMTYiIGN5PSIyMiIgcj0iNCIgZmlsbD0iIzIyYzU1ZSIvPgogIDxjaXJjbGUgY3g9IjE0LjUiIGN5PSIyMC44IiByPSIxLjIiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4zNSkiLz4KICA8IS0tIFBvbGUgLS0+CiAgPHJlY3QgeD0iMTQuNSIgeT0iMjgiIHdpZHRoPSIzIiBoZWlnaHQ9IjMiIHJ4PSIwLjUiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4zKSIvPgo8L3N2Zz4=">
 <link rel="shortcut icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIj4KICA8IS0tIEJhY2tncm91bmQgY2lyY2xlIC0tPgogIDxjaXJjbGUgY3g9IjE2IiBjeT0iMTYiIHI9IjE1IiBmaWxsPSIjMGYyNTU3Ii8+CiAgPCEtLSBIb3VzaW5nIC0tPgogIDxyZWN0IHg9IjkiIHk9IjQiIHdpZHRoPSIxNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiMxMTE4MjciLz4KICA8cmVjdCB4PSI5IiB5PSI0IiB3aWR0aD0iMTQiIGhlaWdodD0iMjQiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4yKSIgc3Ryb2tlLXdpZHRoPSIwLjgiLz4KICA8IS0tIFJlZCBsaWdodCBPTiAtLT4KICA8Y2lyY2xlIGN4PSIxNiIgY3k9IjEwIiByPSI0IiBmaWxsPSIjZWY0NDQ0Ii8+CiAgPGNpcmNsZSBjeD0iMTQuNSIgY3k9IjguOCIgcj0iMS4yIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuNCkiLz4KICA8IS0tIFllbGxvdyBsaWdodCBPRkYgLS0+CiAgPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iNCIgZmlsbD0iIzNkMmUwMCIvPgogIDwhLS0gR3JlZW4gbGlnaHQgT04gLS0+CiAgPGNpcmNsZSBjeD0iMTYiIGN5PSIyMiIgcj0iNCIgZmlsbD0iIzIyYzU1ZSIvPgogIDxjaXJjbGUgY3g9IjE0LjUiIGN5PSIyMC44IiByPSIxLjIiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4zNSkiLz4KICA8IS0tIFBvbGUgLS0+CiAgPHJlY3QgeD0iMTQuNSIgeT0iMjgiIHdpZHRoPSIzIiBoZWlnaHQ9IjMiIHJ4PSIwLjUiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4zKSIvPgo8L3N2Zz4=">
@@ -911,6 +916,14 @@ function showToast(msg,isErr=false){
 }
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
+  // Register Service Worker for PWA
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      console.log('SW registered:', reg.scope);
+    }).catch(err=>{
+      console.log('SW registration failed:', err);
+    });
+  }
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&document.getElementById('editPassModal').classList.contains('open')){
