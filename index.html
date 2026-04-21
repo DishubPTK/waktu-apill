@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0f2557">
+<meta name="msapplication-navbutton-color" content="#0f2557">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  /* Ensure app has background for recent apps screenshot */
+  html, body { background-color: #0f2557; }
+</style>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -631,11 +637,11 @@ function openDetail(idx){
   currentSimpang=filteredData[idx];
   document.getElementById('detailHdrName').textContent=currentSimpang.lokasi;
   renderDetail();
-  // showPage already pushes history state for 'detail'
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pgDetail').classList.add('active');
-  history.pushState({page:'detail'}, '', '');
   window.scrollTo(0,0);
+  // Push 1 state for detail page (back will return to home)
+  history.pushState({page:'detail'}, '', '');
 }
 
 function renderDetail(){
@@ -895,83 +901,101 @@ function showToast(msg,isErr=false){
   setTimeout(()=>t.classList.remove('show'),2800);
 }
 // ── HARDWARE BACK BUTTON (Android PWA) ──────────────────
+// Strategy: Always maintain a "stack" of history entries on home page
+// so popstate fires instead of the app exiting directly.
 let _backPressTime = 0;
 let _backPressTimer = null;
+let _isNavigatingBack = false;
 
-// Push state setiap pindah halaman agar ada history untuk back button
-const _origShowPage = showPage;
-// Override showPage to manage history stack
-function showPage(name){
-  if(name==='setup'&&!canEdit){
-    showEditPassModal(()=>showPage('setup'));
-    return;
+// Repush multiple history states to buffer against exit
+function _pushHomeStates(count = 3) {
+  for (let i = 0; i < count; i++) {
+    history.pushState({page: 'home', i: i}, '', '');
   }
-  // Push history state so Android back button has something to go back to
-  if(name !== 'home'){
-    history.pushState({page: name}, '', '');
-  }
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  const id='pg'+name.charAt(0).toUpperCase()+name.slice(1);
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0,0);
-  if(name==='setup'&&API_URL)document.getElementById('apiUrlInput').value=API_URL;
 }
 
-// Handle Android back button (popstate event)
+function showPage(name) {
+  if (name === 'setup' && !canEdit) {
+    showEditPassModal(() => showPage('setup'));
+    return;
+  }
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const id = 'pg' + name.charAt(0).toUpperCase() + name.slice(1);
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+  if (name === 'setup' && API_URL) document.getElementById('apiUrlInput').value = API_URL;
+
+  if (name === 'home') {
+    // On home: push multiple states as buffer
+    _pushHomeStates(3);
+  } else {
+    // On other pages: push 1 state so back returns home
+    history.pushState({page: name}, '', '');
+  }
+}
+
 window.addEventListener('popstate', e => {
+  if (_isNavigatingBack) return;
   const active = document.querySelector('.page.active');
-  if(!active) return;
-  const activePage = active.id; // e.g. "pgDetail", "pgSetup"
+  if (!active) return;
+  const activePage = active.id;
 
-  // If on detail or setup page → go back to home
-  if(activePage === 'pgDetail' || activePage === 'pgSetup'){
-    // Don't push state here — we're going back naturally
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  // ── If on detail/setup page → go back to home ──
+  if (activePage === 'pgDetail' || activePage === 'pgSetup') {
+    _isNavigatingBack = true;
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
-    window.scrollTo(0,0);
+    window.scrollTo(0, 0);
+    _pushHomeStates(3);
+    setTimeout(() => { _isNavigatingBack = false; }, 100);
     return;
   }
 
-  // If on home page and modal open → close modal
-  const editModal = document.getElementById('editModal');
+  // ── If modal open → close it ──
   const passModal = document.getElementById('editPassModal');
-  if(passModal && passModal.classList.contains('open')){
+  const editModal = document.getElementById('editModal');
+  if (passModal && passModal.classList.contains('open')) {
     closeEditPassModal();
-    history.pushState({page:'home'}, '', ''); // restore state
+    _pushHomeStates(3);
     return;
   }
-  if(editModal && editModal.classList.contains('open')){
+  if (editModal && editModal.classList.contains('open')) {
     closeModal();
-    history.pushState({page:'home'}, '', ''); // restore state
+    _pushHomeStates(3);
     return;
   }
 
-  // If on home page → double back within 0.7s to exit
+  // ── Home page: double-back-to-exit logic ──
   const now = Date.now();
-  if(_backPressTime > 0 && now - _backPressTime < 700){
-    // Second press within 0.7s → exit app
+  if (_backPressTime > 0 && now - _backPressTime < 700) {
+    // Second press within 0.7s → ALLOW EXIT
+    // Don't repush — let the history drain so app exits
+    _backPressTime = 0;
+    clearTimeout(_backPressTimer);
+    history.go(-10); // drain remaining history entries to force exit
     return;
   }
-  // First press (or too slow) → reset timer, show toast, block exit
+  // First press (or too slow) → show toast, repush buffer
   _backPressTime = now;
-  // Auto-reset after 0.7s so next back press starts fresh
   clearTimeout(_backPressTimer);
-  _backPressTimer = setTimeout(() => { _backPressTime = 0; }, 700);
+  _backPressTimer = setTimeout(() => {
+    _backPressTime = 0; // reset if no second press within 0.7s
+  }, 700);
   showExitToast();
-  history.pushState({page:'home'}, '', ''); // push state again to prevent exit
+  _pushHomeStates(3); // repush buffer to prevent exit
 });
 
-function showExitToast(){
+function showExitToast() {
   const t = document.getElementById('toast');
   t.textContent = '⬅ Tekan lagi untuk keluar';
   t.className = 'toast';
   t.style.background = '#334155';
   t.classList.add('show');
-  setTimeout(()=>{ t.classList.remove('show'); t.style.background=''; }, 1500);
+  setTimeout(() => { t.classList.remove('show'); t.style.background = ''; }, 1500);
 }
 
-// Push initial state on load so back button has a state to pop
-window.history.pushState({page:'home'}, '', '');
+// Push initial states on load
+_pushHomeStates(3);
 
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;

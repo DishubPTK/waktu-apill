@@ -1,6 +1,6 @@
 // Service Worker for APILL PWA
 // !! Update versi ini setiap kali ada file baru !!
-const CACHE_NAME = 'apill-v4';
+const CACHE_NAME = 'apill-v5';
 const urlsToCache = [
   '/waktu-apill/',
   '/waktu-apill/index.html',
