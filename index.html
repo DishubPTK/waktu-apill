@@ -472,6 +472,155 @@ function doLogin(){
 document.getElementById('passInput').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 
+// ── LOAD DATA ────────────────────────────────────────────
+async function loadData(){
+  setSpin(true);
+  if(!API_URL){await loadCSV();setSpin(false);return;}
+  try{
+    const url=API_URL+(API_URL.includes('?')?'&':'?')+'action=getData';
+    const res=await fetch(url,{method:'GET',redirect:'follow'});
+    const text=await res.text();
+    if(text.trim().startsWith('<'))throw new Error('HTML');
+    const json=JSON.parse(text);
+    if(json.status==='ok'){processData(json.data);hideBanner();showToast('✅ '+allData.length+' simpang dimuat');}
+    else throw new Error(json.message);
+  }catch(e){await loadViaJSONP();}
+  setSpin(false);
+}
+async function syncData(){await loadData();}
+
+function loadViaJSONP(){
+  return new Promise(resolve=>{
+    const old=document.getElementById('_js');if(old)old.remove();
+    window.__cb=function(data){
+      if(data&&data.status==='ok'){processData(data.data);hideBanner();showToast('✅ '+allData.length+' simpang dimuat');}
+      else{loadCSV().then(resolve);return;}
+      resolve();
+    };
+    const s=document.createElement('script');s.id='_js';
+    s.src=API_URL+(API_URL.includes('?')?'&':'?')+'action=getData&callback=__cb';
+    s.onerror=()=>loadCSV().then(resolve);
+    document.head.appendChild(s);
+    setTimeout(()=>loadCSV().then(resolve),8000);
+  });
+}
+
+async function loadCSV(){
+  try{
+    const res=await fetch('https://docs.google.com/spreadsheets/d/'+SPREADSHEET_ID+'/export?format=csv&gid=0');
+    if(!res.ok)throw new Error('HTTP');
+    const text=await res.text();
+    if(text.trim().startsWith('<!'))throw new Error('Not public');
+    processData(parseCSV(text));showBanner();
+  }catch(e){
+    showBanner();
+    document.getElementById('gridCards').innerHTML='<div class="empty-state" style="grid-column:1/-1">🔌 Data belum tersedia.<br><br><span style="color:var(--accent);cursor:pointer" onclick="showPage(\'setup\')">→ Buka panduan Setup</span></div>';
+  }
+}
+
+function setSpin(on){['syncIcon','syncIcon2'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.animation=on?'spin .8s linear infinite':'';}); }
+function showBanner(){document.getElementById('offlineBanner').style.display='flex';}
+function hideBanner(){document.getElementById('offlineBanner').style.display='none';}
+
+function parseCSV(text){
+  return text.split('\n').map(line=>{
+    const r=[];let cur='',q=false;
+    for(const ch of line){if(ch==='"')q=!q;else if(ch===','&&!q){r.push(cur.trim());cur='';}else cur+=ch;}
+    r.push(cur.trim());return r;
+  });
+}
+
+function gv(row,idx){
+  if(idx<0||!row||idx>=row.length)return'';
+  const v=row[idx];return v!==undefined&&v!==null?v.toString().trim():'';
+}
+
+function processData(rows){
+  allData=[];
+  if(!rows||rows.length<3)return;
+  let hRow=-1,cL=0,cJN=2,cJM=3,cJS=4,cDN=12,cDS=16,cAR=-1,cKu=-1,cLU=-1;
+  for(let ri=0;ri<Math.min(5,rows.length);ri++){
+    for(let ci=0;ci<rows[ri].length;ci++){
+      if((rows[ri][ci]||'').toString().trim().toLowerCase()==='lokasi'){hRow=ri;cL=ci;break;}
+    }
+    if(hRow>=0)break;
+  }
+  if(hRow>=0){
+    rows[hRow].forEach((cell,ci)=>{
+      const c=(cell||'').toString().trim().toLowerCase();
+      if(c==='jam normal')cJN=ci;if(c==='jam malam')cJM=ci;
+      if(c==='jam sibuk 1')cJS=ci;if(c==='all red')cAR=ci;if(c==='kuning')cKu=ci;
+      if(c.includes('terakhir')||c.includes('diperbarui')||c.includes('updated'))cLU=ci;
+    });
+    if(hRow>0){
+      rows[hRow-1].forEach((cell,ci)=>{
+        const c=(cell||'').toString().trim().toLowerCase();
+        if(c.includes('durasi normal'))cDN=ci;
+        if(c.includes('durasi sibuk')&&c.includes('1'))cDS=ci;
+      });
+    }
+  }
+  const ds=hRow>=0?hRow+1:2;
+  let cSG=[-1,-1,-1,-1];
+  if(hRow>=0){
+    const hr=rows[hRow];
+    let ketStart=-1;
+    if(hRow>0){
+      const hr0=rows[hRow-1];
+      for(let ci=0;ci<hr0.length;ci++){
+        if((hr0[ci]||'').toString().trim().toLowerCase().includes('keterangan')){ketStart=ci;break;}
+      }
+    }
+    if(ketStart>=0){
+      for(let ci=ketStart;ci<hr.length;ci++){
+        const c=(hr[ci]||'').toString().trim().toUpperCase();
+        if(c==='SG1'&&cSG[0]<0)cSG[0]=ci;
+        else if(c==='SG2'&&cSG[1]<0)cSG[1]=ci;
+        else if(c==='SG3'&&cSG[2]<0)cSG[2]=ci;
+        else if(c==='SG4'&&cSG[3]<0)cSG[3]=ci;
+      }
+    }
+    if(cSG.every(c=>c<0)){
+      let lastSG1=-1;
+      for(let ci=0;ci<hr.length;ci++){if((hr[ci]||'').toString().trim().toUpperCase()==='SG1')lastSG1=ci;}
+      if(lastSG1>=0){
+        const h2=(hr[lastSG1+1]||'').toString().trim().toUpperCase();
+        const h3=(hr[lastSG1+2]||'').toString().trim().toUpperCase();
+        const h4=(hr[lastSG1+3]||'').toString().trim().toUpperCase();
+        if(h2==='SG2'&&h3==='SG3'&&h4==='SG4')cSG=[lastSG1,lastSG1+1,lastSG1+2,lastSG1+3];
+      }
+    }
+  }
+  if(cAR<0||cKu<0){
+    const fr=rows[ds];
+    if(fr){const ns=[];for(let ci=fr.length-1;ci>=40&&ns.length<2;ci--){const v=(fr[ci]||'').toString().trim();if(v&&!isNaN(v)&&+v>0&&+v<=20)ns.unshift(ci);}if(ns.length>=2){cAR=ns[0];cKu=ns[1];}else if(ns.length===1)cAR=ns[0];}
+  }
+  const cm={cL,cJN,cJM,cJS,cDN,cDS,cAR,cKu,cSG,cLU};
+  for(let i=ds;i<rows.length;i++){
+    const r=rows[i];if(!r||!r.length)continue;
+    const lokasi=gv(r,cL);if(!lokasi||lokasi.toLowerCase()==='lokasi')continue;
+    const jamSibuk=[];for(let j=0;j<MAX_SIBUK;j++){const v=gv(r,cJS+j);if(v)jamSibuk.push(v);}
+    const dN=[0,1,2,3].map(j=>gv(r,cDN+j));
+    const dS=[];for(let s=0;s<MAX_SIBUK;s++)dS.push([0,1,2,3].map(j=>gv(r,cDS+s*4+j)));
+    const sgDesc=cSG.map(ci=>ci>=0?gv(r,ci):'');
+    allData.push({rowIndex:i+1,lokasi,jamNormal:fmtTime(gv(r,cJN)),jamMalam:fmtTime(gv(r,cJM)),jamSibuk,dN,dS,allRed:cAR>=0?gv(r,cAR):'',kuning:cKu>=0?gv(r,cKu):'',sgDesc,lastUpdate:cLU>=0?gv(r,cLU):'',rawRow:[...r],cm});
+  }
+  filteredData=[...allData];
+  document.getElementById('hdrN').textContent=allData.length;
+  renderGrid();
+  if(currentSimpang){
+    const refreshed=allData.find(d=>d.lokasi===currentSimpang.lokasi);
+    if(refreshed){currentSimpang=refreshed;renderDetail();document.getElementById('detailHdrName').textContent=currentSimpang.lokasi;}
+  }
+}
+
+function renderGrid(){
+  const el=document.getElementById('gridCards');
+  if(!filteredData.length){el.innerHTML='<div class="empty-state" style="grid-column:1/-1">🔍 Tidak ada hasil.</div>';return;}
+  el.innerHTML=filteredData.map((d,i)=>`<div class="grid-card" onclick="openDetail(${i})"><div class="grid-card-name">${d.lokasi}</div></div>`).join('');
+}
+
+
 function filterCards(){
   const q=document.getElementById('searchInput').value.toLowerCase().trim();
   filteredData=q?allData.filter(d=>d.lokasi.toLowerCase().includes(q)):[...allData];
