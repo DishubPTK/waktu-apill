@@ -947,7 +947,7 @@ window.addEventListener('popstate', e => {
 
   // If on home page → double back to exit
   const now = Date.now();
-  if(now - _backPressTime < 2000){
+  if(now - _backPressTime < 700){
     // Second press within 2s → allow exit (do nothing, browser handles it)
     return;
   }
@@ -963,7 +963,7 @@ function showExitToast(){
   t.className = 'toast';
   t.style.background = '#334155';
   t.classList.add('show');
-  setTimeout(()=>{ t.classList.remove('show'); t.style.background=''; }, 2000);
+  setTimeout(()=>{ t.classList.remove('show'); t.style.background=''; }, 700);
 }
 
 // Push initial state on load so back button has a state to pop
