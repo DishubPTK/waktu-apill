@@ -896,6 +896,7 @@ function showToast(msg,isErr=false){
 }
 // ── HARDWARE BACK BUTTON (Android PWA) ──────────────────
 let _backPressTime = 0;
+let _backPressTimer = null;
 
 // Push state setiap pindah halaman agar ada history untuk back button
 const _origShowPage = showPage;
@@ -945,14 +946,17 @@ window.addEventListener('popstate', e => {
     return;
   }
 
-  // If on home page → double back to exit
+  // If on home page → double back within 0.7s to exit
   const now = Date.now();
-  if(now - _backPressTime < 700){
-    // Second press within 2s → allow exit (do nothing, browser handles it)
+  if(_backPressTime > 0 && now - _backPressTime < 700){
+    // Second press within 0.7s → exit app
     return;
   }
+  // First press (or too slow) → reset timer, show toast, block exit
   _backPressTime = now;
-  // Show toast "Tekan lagi untuk keluar"
+  // Auto-reset after 0.7s so next back press starts fresh
+  clearTimeout(_backPressTimer);
+  _backPressTimer = setTimeout(() => { _backPressTime = 0; }, 700);
   showExitToast();
   history.pushState({page:'home'}, '', ''); // push state again to prevent exit
 });
@@ -963,7 +967,7 @@ function showExitToast(){
   t.className = 'toast';
   t.style.background = '#334155';
   t.classList.add('show');
-  setTimeout(()=>{ t.classList.remove('show'); t.style.background=''; }, 700);
+  setTimeout(()=>{ t.classList.remove('show'); t.style.background=''; }, 1500);
 }
 
 // Push initial state on load so back button has a state to pop
