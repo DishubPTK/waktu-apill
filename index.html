@@ -679,7 +679,8 @@ function openDetail(idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pgDetail').classList.add('active');
   window.scrollTo(0,0);
-  history.pushState({page:'detail'}, '');
+  _cameFromPage = false;
+  history.pushState({page:'detail'}, '', location.href);
 }
 
 function renderDetail(){
@@ -748,7 +749,7 @@ function _doOpenEdit(){
   document.getElementById('editModalSub').textContent=d.lokasi;
   buildForm(d);
   document.getElementById('editModal').classList.add('open');
-  history.pushState({page:'modal'},'');
+  history.pushState({page:'modal'},'',location.href);
 }
 
 function buildForm(d){
@@ -890,7 +891,7 @@ function showEditPassModal(callback){
   document.getElementById('editPassInput').value='';
   document.getElementById('editPassErr').style.display='none';
   document.getElementById('editPassModal').classList.add('open');
-  history.pushState({page:'modal'},'');
+  history.pushState({page:'modal'},'',location.href);
   setTimeout(()=>document.getElementById('editPassInput').focus(),300);
 }
 
@@ -942,6 +943,7 @@ function showToast(msg,isErr=false){
 }
 // ── BACK BUTTON ──────────────────────────────────────────
 let _exitTime = 0;
+let _cameFromPage = false; // true when we just navigated back to home
 
 function showPage(name) {
   if (name === 'setup' && !canEdit) {
@@ -952,52 +954,64 @@ function showPage(name) {
   document.getElementById('pg' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   window.scrollTo(0, 0);
   if (name === 'setup' && API_URL) document.getElementById('apiUrlInput').value = API_URL;
-  history.pushState({ page: name }, '');
+  history.pushState({ page: name }, '', location.href);
 }
 
 window.addEventListener('popstate', function() {
-  // Any modal open → close it, push 2 states back
   const passModal = document.getElementById('editPassModal');
   const editModal  = document.getElementById('editModal');
+
+  // Modal open → close modal, push guard
   if (passModal && passModal.classList.contains('open')) {
     closeEditPassModal();
-    history.pushState({ page: 'home' }, '');
-    history.pushState({ page: 'home' }, '');
+    _cameFromPage = true;
+    history.pushState({ page: 'home' }, '', location.href);
     return;
   }
   if (editModal && editModal.classList.contains('open')) {
     closeModal();
-    history.pushState({ page: 'home' }, '');
-    history.pushState({ page: 'home' }, '');
+    _cameFromPage = true;
+    history.pushState({ page: 'home' }, '', location.href);
     return;
   }
 
-  // Detail / Setup → back to Home, push 2 states
-  // so first back on home triggers toast, not exit
+  // Detail/Setup → go to Home
   const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
   if (activePage === 'pgDetail' || activePage === 'pgSetup') {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
     window.scrollTo(0, 0);
-    history.pushState({ page: 'home' }, '');
-    history.pushState({ page: 'home' }, '');
+    _cameFromPage = true;      // flag: just came back to home
+    _exitTime = 0;             // reset exit timer
+    history.pushState({ page: 'home' }, '', location.href);
     return;
   }
 
-  // Home → double back to exit
-  const now = Date.now();
-  if (now - _exitTime < 1500) {
-    // Second back within 1.5s → really exit (don't pushState)
+  // Home page back button
+  if (_cameFromPage) {
+    // First back on home after returning from another page
+    // Show toast, reset flag, block exit
+    _cameFromPage = false;
+    _exitTime = Date.now();
+    _showBackToast();
+    history.pushState({ page: 'home' }, '', location.href);
     return;
   }
+
+  const now = Date.now();
+  if (now - _exitTime < 1500) {
+    // Second back within 1.5s → exit (don't push, let app close)
+    return;
+  }
+  // Fresh back on home → show toast
   _exitTime = now;
   _showBackToast();
-  history.pushState({ page: 'home' }, ''); // block exit
+  history.pushState({ page: 'home' }, '', location.href);
 });
 
 function _showBackToast() {
   const t = document.getElementById('toast');
-  t.textContent = '⬅ Tekan back lagi untuk keluar';
+  t.textContent = '\u2b05 Tekan back lagi untuk keluar';
   t.className = 'toast';
   t.style.background = '#334155';
   t.style.bottom = '30px';
@@ -1009,13 +1023,13 @@ function _showBackToast() {
   }, 1500);
 }
 
-// Push initial state so popstate fires on first back press
-history.pushState({ page: 'home' }, '');
+// Initial state
+history.pushState({ page: 'home' }, '', location.href);
 
 
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
-  history.pushState({page:'home'}, ''); // initial state
+  history.pushState({page:'home'}, '', location.href); // initial state
   // Disable pull-to-refresh on mobile — strong prevention
   let _startY = 0;
   document.addEventListener('touchstart', e => {
