@@ -692,6 +692,7 @@ function openDetail(idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pgDetail').classList.add('active');
   window.scrollTo(0,0);
+  _navLevel = 1;
   _pushGuard();
 }
 
@@ -938,20 +939,7 @@ function showExitDialog(){
 function closeExitDialog(){
   document.getElementById('exitDialog').classList.remove('open');
 }
-function confirmExit(){
-  // Close the dialog then let the app exit naturally
-  // In PWA standalone: navigate to a blank page or use window methods
-  closeExitDialog();
-  // Try multiple exit methods for different Android versions
-  try { window.close(); } catch(e){}
-  // Fallback: navigate away
-  setTimeout(() => {
-    try { history.go(-(history.length + 10)); } catch(e){}
-  }, 100);
-  setTimeout(() => {
-    try { window.location.href = 'about:blank'; } catch(e){}
-  }, 300);
-}
+
 
 function saveApiUrl(){
   const url=document.getElementById('apiUrlInput').value.trim();if(!url)return;
@@ -972,9 +960,12 @@ function showToast(msg,isErr=false){
   t.className='toast'+(isErr?' error':'');t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2800);
 }
-// ── HARDWARE BACK BUTTON (Android PWA) ──────────────────
+// ── BACK BUTTON HANDLER ──────────────────────────────────
+// navLevel: 0=home, 1=detail/setup, 2=modal
+let _navLevel = 0;
+
 function _pushGuard() {
-  history.pushState({ guard: true }, document.title, location.href);
+  history.pushState({ guard: true }, '');
 }
 
 function showPage(name) {
@@ -986,24 +977,39 @@ function showPage(name) {
   document.getElementById('pg' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   window.scrollTo(0, 0);
   if (name === 'setup' && API_URL) document.getElementById('apiUrlInput').value = API_URL;
+  _navLevel = (name === 'home') ? 0 : 1;
   _pushGuard();
 }
 
 window.addEventListener('popstate', function() {
-  const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
+  // If exit dialog is open, close it and push guard (user pressed back to dismiss)
+  const exitDlg = document.getElementById('exitDialog');
+  if (exitDlg && exitDlg.classList.contains('open')) {
+    exitDlg.classList.remove('open');
+    _pushGuard();
+    return;
+  }
 
-  // Close modals first
+  // If edit password modal open
   const passModal = document.getElementById('editPassModal');
-  const editModal  = document.getElementById('editModal');
   if (passModal && passModal.classList.contains('open')) {
-    closeEditPassModal(); _pushGuard(); return;
-  }
-  if (editModal && editModal.classList.contains('open')) {
-    closeModal(); _pushGuard(); return;
+    closeEditPassModal();
+    _pushGuard();
+    return;
   }
 
-  // Go back to home from detail/setup
+  // If edit form modal open
+  const editModal = document.getElementById('editModal');
+  if (editModal && editModal.classList.contains('open')) {
+    closeModal();
+    _pushGuard();
+    return;
+  }
+
+  // If on detail or setup → go back to home
+  const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
   if (activePage === 'pgDetail' || activePage === 'pgSetup') {
+    _navLevel = 0;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
     window.scrollTo(0, 0);
@@ -1012,9 +1018,24 @@ window.addEventListener('popstate', function() {
   }
 
   // On home page → show exit confirmation dialog
-  _pushGuard(); // push guard first to prevent exit
-  showExitDialog();
+  _pushGuard(); // push guard BEFORE showing dialog to prevent fast double-back exit
+  // Small delay so guard is registered before dialog shown
+  setTimeout(() => showExitDialog(), 50);
 });
+
+function showExitDialog() {
+  document.getElementById('exitDialog').classList.add('open');
+}
+function closeExitDialog() {
+  document.getElementById('exitDialog').classList.remove('open');
+}
+function confirmExit() {
+  closeExitDialog();
+  // Drain all history entries so the app exits naturally
+  // We need to go back past all our guard states
+  const steps = history.length;
+  history.go(-steps);
+}
 
 
 window.addEventListener('load',()=>{
