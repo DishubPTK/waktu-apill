@@ -194,6 +194,45 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 /* Remove grid card bottom padding when no badges */
 .grid-card{padding-bottom:14px}
 
+/* ── EXIT DIALOG ── */
+.exit-overlay{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(15,23,42,0.65);
+  backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;
+  padding:20px;
+}
+.exit-overlay.open{display:flex}
+.exit-card{
+  background:#fff;border-radius:18px;
+  padding:28px 24px 20px;
+  width:100%;max-width:300px;
+  text-align:center;
+  box-shadow:0 8px 32px rgba(0,0,0,0.25);
+  animation:popIn .2s ease;
+}
+@keyframes popIn{from{transform:scale(.88);opacity:0}to{transform:scale(1);opacity:1}}
+.exit-icon{font-size:2.4rem;margin-bottom:10px}
+.exit-title{font-weight:800;font-size:1.1rem;color:var(--navy);margin-bottom:6px}
+.exit-msg{font-size:.8rem;color:var(--text2);margin-bottom:22px;line-height:1.5}
+.exit-actions{display:flex;gap:10px}
+.exit-btn-no{
+  flex:1;padding:12px;
+  background:var(--bg);border:1.5px solid var(--border);
+  border-radius:10px;font-family:inherit;font-weight:700;
+  font-size:.88rem;color:var(--text2);cursor:pointer;
+  transition:background .15s;
+}
+.exit-btn-no:active{background:var(--border)}
+.exit-btn-yes{
+  flex:1;padding:12px;
+  background:var(--navy);border:none;
+  border-radius:10px;font-family:inherit;font-weight:700;
+  font-size:.88rem;color:#fff;cursor:pointer;
+  transition:opacity .15s;
+}
+.exit-btn-yes:active{opacity:.85}
+
 /* ── LAST UPDATED BAR ── */
 .last-update-bar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:11px 14px;box-shadow:var(--shadow);color:var(--text2)}
 .last-update-icon{font-size:1rem;flex-shrink:0}
@@ -407,6 +446,19 @@ function doPost(e) {
         <div class="step-num">STATUS</div>
         <div class="step-body" id="connStatus" style="color:var(--green)">✅ URL default sudah terpasang. Klik Sync untuk test koneksi.</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- EXIT CONFIRMATION DIALOG -->
+<div class="exit-overlay" id="exitDialog">
+  <div class="exit-card">
+    <div class="exit-icon">🚦</div>
+    <div class="exit-title">Keluar Aplikasi?</div>
+    <div class="exit-msg">Apakah kamu yakin ingin keluar dari APILL?</div>
+    <div class="exit-actions">
+      <button class="exit-btn-no" onclick="closeExitDialog()">Tidak</button>
+      <button class="exit-btn-yes" onclick="confirmExit()">Ya, Keluar</button>
     </div>
   </div>
 </div>
@@ -880,6 +932,27 @@ function submitEditPass(){
   }
 }
 
+function showExitDialog(){
+  document.getElementById('exitDialog').classList.add('open');
+}
+function closeExitDialog(){
+  document.getElementById('exitDialog').classList.remove('open');
+}
+function confirmExit(){
+  // Close the dialog then let the app exit naturally
+  // In PWA standalone: navigate to a blank page or use window methods
+  closeExitDialog();
+  // Try multiple exit methods for different Android versions
+  try { window.close(); } catch(e){}
+  // Fallback: navigate away
+  setTimeout(() => {
+    try { history.go(-(history.length + 10)); } catch(e){}
+  }, 100);
+  setTimeout(() => {
+    try { window.location.href = 'about:blank'; } catch(e){}
+  }, 300);
+}
+
 function saveApiUrl(){
   const url=document.getElementById('apiUrlInput').value.trim();if(!url)return;
   API_URL=url;localStorage.setItem('apill_api_url',url);
@@ -900,9 +973,6 @@ function showToast(msg,isErr=false){
   setTimeout(()=>t.classList.remove('show'),2800);
 }
 // ── HARDWARE BACK BUTTON (Android PWA) ──────────────────
-let _backPressTime = 0;
-let _backPressTimer = null;
-
 function _pushGuard() {
   history.pushState({ guard: true }, document.title, location.href);
 }
@@ -941,34 +1011,10 @@ window.addEventListener('popstate', function() {
     return;
   }
 
-  // Home page: double-back-to-exit within 0.7s
-  const now = Date.now();
-  if (_backPressTime > 0 && (now - _backPressTime) <= 700) {
-    // Confirmed exit — do NOT pushGuard, let browser handle exit
-    _backPressTime = 0;
-    clearTimeout(_backPressTimer);
-    return;
-  }
-
-  // First press: show toast, push guard, start timer
-  _backPressTime = now;
-  clearTimeout(_backPressTimer);
-  _backPressTimer = setTimeout(() => { _backPressTime = 0; }, 700);
-  _showExitToast();
-  _pushGuard();
+  // On home page → show exit confirmation dialog
+  _pushGuard(); // push guard first to prevent exit
+  showExitDialog();
 });
-
-function _showExitToast() {
-  const t = document.getElementById('toast');
-  t.textContent = '⬅ Tekan lagi untuk keluar';
-  t.className = 'toast';
-  t.style.cssText = 'background:#334155;bottom:60px;opacity:1';
-  t.classList.add('show');
-  setTimeout(() => {
-    t.classList.remove('show');
-    t.style.cssText = '';
-  }, 1500);
-}
 
 
 window.addEventListener('load',()=>{
