@@ -640,7 +640,7 @@ function openDetail(idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pgDetail').classList.add('active');
   window.scrollTo(0,0);
-  _fillBuffer();
+  _pushGuard();
 }
 
 function renderDetail(){
@@ -709,7 +709,7 @@ function _doOpenEdit(){
   document.getElementById('editModalSub').textContent=d.lokasi;
   buildForm(d);
   document.getElementById('editModal').classList.add('open');
-  _fillBuffer();
+  _pushGuard();
 }
 
 function buildForm(d){
@@ -851,7 +851,7 @@ function showEditPassModal(callback){
   document.getElementById('editPassInput').value='';
   document.getElementById('editPassErr').style.display='none';
   document.getElementById('editPassModal').classList.add('open');
-  _fillBuffer();
+  _pushGuard();
   setTimeout(()=>document.getElementById('editPassInput').focus(),300);
 }
 
@@ -900,20 +900,13 @@ function showToast(msg,isErr=false){
   setTimeout(()=>t.classList.remove('show'),2800);
 }
 // ── HARDWARE BACK BUTTON (Android PWA) ──────────────────
-// Uses large history buffer to catch ALL back button presses in standalone mode
 let _backPressTime = 0;
 let _backPressTimer = null;
-let _isHandlingBack = false;
-const BUFFER_SIZE = 30; // history entries to maintain as buffer
 
-function _fillBuffer() {
-  // Push many states so back button always hits popstate before exiting
-  for (let i = 0; i < BUFFER_SIZE; i++) {
-    history.pushState({ apill: true, i: i }, '');
-  }
+function _pushGuard() {
+  history.pushState({ guard: true }, document.title, location.href);
 }
 
-// Override showPage to work with back navigation
 function showPage(name) {
   if (name === 'setup' && !canEdit) {
     showEditPassModal(() => showPage('setup'));
@@ -923,80 +916,65 @@ function showPage(name) {
   document.getElementById('pg' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   window.scrollTo(0, 0);
   if (name === 'setup' && API_URL) document.getElementById('apiUrlInput').value = API_URL;
-  // Always refill buffer after any navigation
-  _fillBuffer();
+  _pushGuard();
 }
 
-window.addEventListener('popstate', function(e) {
-  if (_isHandlingBack) return;
-  _isHandlingBack = true;
-
+window.addEventListener('popstate', function() {
   const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
 
   // Close modals first
   const passModal = document.getElementById('editPassModal');
-  const editModal = document.getElementById('editModal');
+  const editModal  = document.getElementById('editModal');
   if (passModal && passModal.classList.contains('open')) {
-    closeEditPassModal();
-    _fillBuffer();
-    _isHandlingBack = false;
-    return;
+    closeEditPassModal(); _pushGuard(); return;
   }
   if (editModal && editModal.classList.contains('open')) {
-    closeModal();
-    _fillBuffer();
-    _isHandlingBack = false;
-    return;
+    closeModal(); _pushGuard(); return;
   }
 
-  // Navigate back from detail/setup to home
+  // Go back to home from detail/setup
   if (activePage === 'pgDetail' || activePage === 'pgSetup') {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
     window.scrollTo(0, 0);
-    _fillBuffer();
-    _isHandlingBack = false;
+    _pushGuard();
     return;
   }
 
-  // On home page: double-back-to-exit
+  // Home page: double-back-to-exit within 0.7s
   const now = Date.now();
-  if (_backPressTime > 0 && (now - _backPressTime) < 700) {
-    // Second press within 0.7s → exit
+  if (_backPressTime > 0 && (now - _backPressTime) <= 700) {
+    // Confirmed exit — do NOT pushGuard, let browser handle exit
     _backPressTime = 0;
     clearTimeout(_backPressTimer);
-    // Drain all history to actually exit
-    _isHandlingBack = false;
-    history.go(-(history.length));
     return;
   }
 
-  // First press → show toast, reset timer, refill buffer to block exit
+  // First press: show toast, push guard, start timer
   _backPressTime = now;
   clearTimeout(_backPressTimer);
-  _backPressTimer = setTimeout(() => {
-    _backPressTime = 0; // reset after 0.7s — next back is first press again
-  }, 700);
-
-  showExitToast();
-  _fillBuffer(); // repush buffer to prevent exit
-  _isHandlingBack = false;
+  _backPressTimer = setTimeout(() => { _backPressTime = 0; }, 700);
+  _showExitToast();
+  _pushGuard();
 });
 
-function showExitToast() {
+function _showExitToast() {
   const t = document.getElementById('toast');
   t.textContent = '⬅ Tekan lagi untuk keluar';
   t.className = 'toast';
-  t.style.background = '#334155';
+  t.style.cssText = 'background:#334155;bottom:60px;opacity:1';
   t.classList.add('show');
-  setTimeout(() => { t.classList.remove('show'); t.style.background = ''; }, 1500);
+  setTimeout(() => {
+    t.classList.remove('show');
+    t.style.cssText = '';
+  }, 1500);
 }
 
 
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
-  // Fill initial history buffer for back button handling
-  _fillBuffer();
+  // Push initial guard state for back button
+  _pushGuard();
   // Disable pull-to-refresh on mobile — strong prevention
   let _startY = 0;
   document.addEventListener('touchstart', e => {
