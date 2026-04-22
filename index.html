@@ -450,19 +450,6 @@ function doPost(e) {
   </div>
 </div>
 
-<!-- EXIT CONFIRMATION DIALOG -->
-<div class="exit-overlay" id="exitDialog">
-  <div class="exit-card">
-    <div class="exit-icon">🚦</div>
-    <div class="exit-title">Keluar Aplikasi?</div>
-    <div class="exit-msg">Apakah kamu yakin ingin keluar dari APILL?</div>
-    <div class="exit-actions">
-      <button class="exit-btn-no" onclick="closeExitDialog()">Tidak</button>
-      <button class="exit-btn-yes" onclick="confirmExit()">Ya, Keluar</button>
-    </div>
-  </div>
-</div>
-
 <!-- EDIT PASSWORD MODAL -->
 <div class="modal-overlay" id="editPassModal">
   <div class="modal-sheet" style="max-height:50vh">
@@ -692,8 +679,7 @@ function openDetail(idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pgDetail').classList.add('active');
   window.scrollTo(0,0);
-  _navLevel = 1;
-  _pushGuard();
+  history.pushState({page:'detail'}, '');
 }
 
 function renderDetail(){
@@ -762,7 +748,7 @@ function _doOpenEdit(){
   document.getElementById('editModalSub').textContent=d.lokasi;
   buildForm(d);
   document.getElementById('editModal').classList.add('open');
-  _pushGuard();
+  history.pushState({page:'modal'},'');
 }
 
 function buildForm(d){
@@ -904,7 +890,7 @@ function showEditPassModal(callback){
   document.getElementById('editPassInput').value='';
   document.getElementById('editPassErr').style.display='none';
   document.getElementById('editPassModal').classList.add('open');
-  _pushGuard();
+  history.pushState({page:'modal'},'');
   setTimeout(()=>document.getElementById('editPassInput').focus(),300);
 }
 
@@ -933,12 +919,6 @@ function submitEditPass(){
   }
 }
 
-function showExitDialog(){
-  document.getElementById('exitDialog').classList.add('open');
-}
-function closeExitDialog(){
-  document.getElementById('exitDialog').classList.remove('open');
-}
 
 
 function saveApiUrl(){
@@ -960,13 +940,8 @@ function showToast(msg,isErr=false){
   t.className='toast'+(isErr?' error':'');t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2800);
 }
-// ── BACK BUTTON HANDLER ──────────────────────────────────
-// navLevel: 0=home, 1=detail/setup, 2=modal
-let _navLevel = 0;
-
-function _pushGuard() {
-  history.pushState({ guard: true }, '');
-}
+// ── BACK BUTTON ──────────────────────────────────────────
+let _exitTime = 0;
 
 function showPage(name) {
   if (name === 'setup' && !canEdit) {
@@ -977,71 +952,66 @@ function showPage(name) {
   document.getElementById('pg' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   window.scrollTo(0, 0);
   if (name === 'setup' && API_URL) document.getElementById('apiUrlInput').value = API_URL;
-  _navLevel = (name === 'home') ? 0 : 1;
-  _pushGuard();
+  history.pushState({ page: name }, '');
 }
 
 window.addEventListener('popstate', function() {
-  // If exit dialog is open, close it and push guard (user pressed back to dismiss)
-  const exitDlg = document.getElementById('exitDialog');
-  if (exitDlg && exitDlg.classList.contains('open')) {
-    exitDlg.classList.remove('open');
-    _pushGuard();
-    return;
-  }
-
-  // If edit password modal open
+  // Any modal open → close it
   const passModal = document.getElementById('editPassModal');
+  const editModal  = document.getElementById('editModal');
   if (passModal && passModal.classList.contains('open')) {
     closeEditPassModal();
-    _pushGuard();
+    history.pushState({ page: 'modal' }, '');
     return;
   }
-
-  // If edit form modal open
-  const editModal = document.getElementById('editModal');
   if (editModal && editModal.classList.contains('open')) {
     closeModal();
-    _pushGuard();
+    history.pushState({ page: 'modal' }, '');
     return;
   }
 
-  // If on detail or setup → go back to home
+  // Detail / Setup → back to Home
   const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
   if (activePage === 'pgDetail' || activePage === 'pgSetup') {
-    _navLevel = 0;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
     window.scrollTo(0, 0);
-    _pushGuard();
+    history.pushState({ page: 'home' }, '');
     return;
   }
 
-  // On home page → show exit confirmation dialog
-  _pushGuard(); // push guard BEFORE showing dialog to prevent fast double-back exit
-  // Small delay so guard is registered before dialog shown
-  setTimeout(() => showExitDialog(), 50);
+  // Home → double back to exit
+  const now = Date.now();
+  if (now - _exitTime < 1500) {
+    // Second back within 1.5s → really exit (don't pushState)
+    return;
+  }
+  _exitTime = now;
+  _showBackToast();
+  history.pushState({ page: 'home' }, ''); // block exit
 });
 
-function showExitDialog() {
-  document.getElementById('exitDialog').classList.add('open');
+function _showBackToast() {
+  const t = document.getElementById('toast');
+  t.textContent = '⬅ Tekan back lagi untuk keluar';
+  t.className = 'toast';
+  t.style.background = '#334155';
+  t.style.bottom = '30px';
+  t.classList.add('show');
+  setTimeout(() => {
+    t.classList.remove('show');
+    t.style.background = '';
+    t.style.bottom = '';
+  }, 1500);
 }
-function closeExitDialog() {
-  document.getElementById('exitDialog').classList.remove('open');
-}
-function confirmExit() {
-  closeExitDialog();
-  // Drain all history entries so the app exits naturally
-  // We need to go back past all our guard states
-  const steps = history.length;
-  history.go(-steps);
-}
+
+// Push initial state so popstate fires on first back press
+history.pushState({ page: 'home' }, '');
 
 
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
-  // Push initial guard state for back button
-  _pushGuard();
+  history.pushState({page:'home'}, ''); // initial state
   // Disable pull-to-refresh on mobile — strong prevention
   let _startY = 0;
   document.addEventListener('touchstart', e => {
