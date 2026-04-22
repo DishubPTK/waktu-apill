@@ -956,26 +956,30 @@ function showPage(name) {
 }
 
 window.addEventListener('popstate', function() {
-  // Any modal open → close it
+  // Any modal open → close it, push 2 states back
   const passModal = document.getElementById('editPassModal');
   const editModal  = document.getElementById('editModal');
   if (passModal && passModal.classList.contains('open')) {
     closeEditPassModal();
-    history.pushState({ page: 'modal' }, '');
+    history.pushState({ page: 'home' }, '');
+    history.pushState({ page: 'home' }, '');
     return;
   }
   if (editModal && editModal.classList.contains('open')) {
     closeModal();
-    history.pushState({ page: 'modal' }, '');
+    history.pushState({ page: 'home' }, '');
+    history.pushState({ page: 'home' }, '');
     return;
   }
 
-  // Detail / Setup → back to Home
+  // Detail / Setup → back to Home, push 2 states
+  // so first back on home triggers toast, not exit
   const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
   if (activePage === 'pgDetail' || activePage === 'pgSetup') {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
     window.scrollTo(0, 0);
+    history.pushState({ page: 'home' }, '');
     history.pushState({ page: 'home' }, '');
     return;
   }
