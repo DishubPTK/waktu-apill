@@ -679,7 +679,6 @@ function openDetail(idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('pgDetail').classList.add('active');
   window.scrollTo(0,0);
-  _cameFromPage = false;
   history.pushState({page:'detail'}, '', location.href);
 }
 
@@ -943,7 +942,6 @@ function showToast(msg,isErr=false){
 }
 // ── BACK BUTTON ──────────────────────────────────────────
 let _exitTime = 0;
-let _cameFromPage = false;
 
 function showPage(name) {
   if (name === 'setup' && !canEdit) {
@@ -961,49 +959,38 @@ window.addEventListener('popstate', function() {
   const passModal = document.getElementById('editPassModal');
   const editModal  = document.getElementById('editModal');
 
+  // Close modals - replaceState only, no new pushState
   if (passModal && passModal.classList.contains('open')) {
     closeEditPassModal();
-    _cameFromPage = true;
     history.replaceState({ page: 'home' }, '', location.href);
-    history.pushState({ page: 'home' }, '', location.href);
     return;
   }
   if (editModal && editModal.classList.contains('open')) {
     closeModal();
-    _cameFromPage = true;
     history.replaceState({ page: 'home' }, '', location.href);
-    history.pushState({ page: 'home' }, '', location.href);
     return;
   }
 
+  // Detail/Setup → Home - replaceState only, no new pushState
   const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
   if (activePage === 'pgDetail' || activePage === 'pgSetup') {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
     window.scrollTo(0, 0);
-    _cameFromPage = true;
     _exitTime = 0;
     history.replaceState({ page: 'home' }, '', location.href);
-    history.pushState({ page: 'home' }, '', location.href);
     return;
   }
 
-  if (_cameFromPage) {
-    _cameFromPage = false;
-    _exitTime = Date.now();
-    _showBackToast();
-    history.replaceState({ page: 'home' }, '', location.href);
-    history.pushState({ page: 'home' }, '', location.href);
-    return;
-  }
-
+  // On home page
   const now = Date.now();
-  if (now - _exitTime < 1500) {
-    return; // exit
+  if (_exitTime > 0 && now - _exitTime < 1500) {
+    // Second back within 1.5s → exit (don't pushState)
+    return;
   }
+  // First back on home (or too slow) → toast + pushState to block exit
   _exitTime = now;
   _showBackToast();
-  history.replaceState({ page: 'home' }, '', location.href);
   history.pushState({ page: 'home' }, '', location.href);
 });
 
