@@ -1029,6 +1029,7 @@ history.pushState({ page: 'home' }, '', location.href);
 
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
+  history.pushState({page:'home'}, '', location.href); // initial state
   // Disable pull-to-refresh on mobile — strong prevention
   let _startY = 0;
   document.addEventListener('touchstart', e => {

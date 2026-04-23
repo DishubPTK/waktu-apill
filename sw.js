@@ -1,6 +1,7 @@
 // Service Worker for APILL PWA
+// Updated: 2026-04-22 22:15:14
 // !! Update versi ini setiap kali ada file baru !!
-const CACHE_NAME = 'apill-v12';
+const CACHE_NAME = 'apill-v13';
 const urlsToCache = [
   '/waktu-apill/',
   '/waktu-apill/index.html',
