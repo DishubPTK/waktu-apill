@@ -680,6 +680,7 @@ function openDetail(idx){
   document.getElementById('pgDetail').classList.add('active');
   window.scrollTo(0,0);
   _cameFromPage = false;
+  _dbg('openDetail: pushed detail state, history.length=' + history.length);
   history.pushState({page:'detail'}, '', location.href);
 }
 
@@ -943,7 +944,19 @@ function showToast(msg,isErr=false){
 }
 // ── BACK BUTTON ──────────────────────────────────────────
 let _exitTime = 0;
-let _cameFromPage = false; // true when we just navigated back to home
+let _cameFromPage = false;
+
+// DEBUG: show on screen
+function _dbg(msg) {
+  let el = document.getElementById('_dbgBox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = '_dbgBox';
+    el.style.cssText = 'position:fixed;top:80px;left:10px;right:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#0f0;font-size:11px;padding:8px;border-radius:8px;font-family:monospace;max-height:200px;overflow-y:auto';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<div>' + new Date().toLocaleTimeString() + ' ' + msg + '</div>' + el.innerHTML;
+}
 
 function showPage(name) {
   if (name === 'setup' && !canEdit) {
@@ -958,6 +971,8 @@ function showPage(name) {
 }
 
 window.addEventListener('popstate', function() {
+  const activePg = (document.querySelector('.page.active')||{}).id||'?';
+  _dbg('POPSTATE fired. page=' + activePg + ' came=' + _cameFromPage + ' exit=' + _exitTime);
   const passModal = document.getElementById('editPassModal');
   const editModal  = document.getElementById('editModal');
 
@@ -978,6 +993,7 @@ window.addEventListener('popstate', function() {
   // Detail/Setup → go to Home
   const activePage = (document.querySelector('.page.active') || {}).id || 'pgHome';
   if (activePage === 'pgDetail' || activePage === 'pgSetup') {
+    _dbg('→ Going home from ' + activePage);
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('pgHome').classList.add('active');
     window.scrollTo(0, 0);
@@ -989,6 +1005,7 @@ window.addEventListener('popstate', function() {
 
   // Home page back button
   if (_cameFromPage) {
+    _dbg('→ cameFromPage=true, showing toast');
     // First back on home after returning from another page
     // Show toast, reset flag, block exit
     _cameFromPage = false;
@@ -1000,9 +1017,11 @@ window.addEventListener('popstate', function() {
 
   const now = Date.now();
   if (now - _exitTime < 1500) {
+    _dbg('→ EXIT confirmed! diff=' + (now-_exitTime));
     // Second back within 1.5s → exit (don't push, let app close)
     return;
   }
+  _dbg('→ Fresh back on home, showing toast');
   // Fresh back on home → show toast
   _exitTime = now;
   _showBackToast();
@@ -1025,11 +1044,13 @@ function _showBackToast() {
 
 // Initial state
 history.pushState({ page: 'home' }, '', location.href);
+_dbg && _dbg('INIT: pushed home state (back section), length=' + history.length);
 
 
 window.addEventListener('load',()=>{
   document.getElementById('apiUrlInput').value=API_URL;
   history.pushState({page:'home'}, '', location.href); // initial state
+  _dbg('LOAD: pushed home state, length=' + history.length);
   // Disable pull-to-refresh on mobile — strong prevention
   let _startY = 0;
   document.addEventListener('touchstart', e => {
