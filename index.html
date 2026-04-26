@@ -353,6 +353,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
       <div class="hdr-simpang" id="detailHdrName">—</div>
       <div style="flex-shrink:0;display:flex;gap:6px;margin-left:auto">
         <button class="hdr-action-btn hdr-edit-btn" onclick="openEdit()">✏️ Edit</button>
+        <button class="hdr-action-btn" id="undoHistBtn" onclick="showUndoHistory()" style="display:none" title="Riwayat Edit">↩️</button>
         <button class="hdr-action-btn hdr-sync-btn" onclick="syncData()"><span id="syncIcon2">↻</span></button>
       </div>
     </div>
@@ -446,6 +447,19 @@ function doPost(e) {
         <div class="step-num">STATUS</div>
         <div class="step-body" id="connStatus" style="color:var(--green)">✅ URL default sudah terpasang. Klik Sync untuk test koneksi.</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- UNDO HISTORY MODAL -->
+<div class="modal-overlay" id="undoHistModal">
+  <div class="modal-sheet" style="max-height:70vh">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="color:var(--navy)">↩️ Riwayat Edit</div>
+    <div class="modal-sub" id="undoHistSub">10 edit terakhir</div>
+    <div id="undoHistList" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeUndoHistory()">Tutup</button>
     </div>
   </div>
 </div>
@@ -825,6 +839,7 @@ async function saveEdit(){
     cm: d.cm
   });
   if (_undoStack.length > 10) _undoStack.shift(); // keep max 10
+  _updateUndoBtn();
   const nr=[...(d.rawRow||[])];
   const set=(ci,v)=>{if(ci<0)return;while(nr.length<=ci)nr.push('');nr[ci]=v;};
   const cnt=parseInt(document.getElementById('editFormBody').dataset.cnt||'0');
@@ -864,13 +879,13 @@ async function saveEdit(){
     try{
       const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateRow',rowIndex:d.rowIndex,rowData:nr})});
       const json=await res.json();
-      if(json.status==='ok'){showToast('✅ Tersimpan ke Google Sheet!');}
+      if(json.status==='ok'){_showUndoToast();}
       else{throw new Error(json.message);}
     }catch(e){
       // Fallback: use JSONP GET request
       await saveViaJSONP(d.rowIndex, nr);
     }
-  }else{showToast('💾 Tersimpan lokal (setup koneksi untuk sync ke Sheet)');}
+  }else{_showUndoToast();}
 }
 
 function saveViaJSONP(rowIndex, rowData){
@@ -878,7 +893,7 @@ function saveViaJSONP(rowIndex, rowData){
     const old=document.getElementById('_jsSave');if(old)old.remove();
     const cbName='__saveCB_'+Date.now();
     window[cbName]=function(data){
-      if(data&&data.status==='ok'){showToast('✅ Tersimpan ke Google Sheet!');}
+      if(data&&data.status==='ok'){_showUndoToast();}
       else{showToast('⚠️ Gagal simpan: '+(data&&data.message||'error'),true);}
       delete window[cbName];
       resolve();
@@ -936,17 +951,27 @@ function submitEditPass(){
 // ── UNDO SYSTEM ──────────────────────────────────────────
 function _showUndoToast() {
   if (_undoStack.length === 0) return;
-  const snap = _undoStack[_undoStack.length - 1];
-  const t = document.getElementById('toast');
-  t.innerHTML = '✅ Tersimpan &nbsp;<span onclick="doUndo()" style="text-decoration:underline;cursor:pointer;font-weight:800">Undo</span>';
-  t.className = 'toast';
-  t.style.background = 'var(--green)';
-  t.classList.add('show');
-  // Auto hide after 4s
+  // Use a dedicated undo toast element (separate from regular toast)
+  let ut = document.getElementById('_undoToastEl');
+  if (!ut) {
+    ut = document.createElement('div');
+    ut.id = '_undoToastEl';
+    ut.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);' +
+      'background:#15803d;color:#fff;font-family:inherit;font-weight:700;font-size:.82rem;' +
+      'padding:11px 20px;border-radius:20px;z-index:400;display:flex;align-items:center;' +
+      'gap:12px;box-shadow:0 4px 16px rgba(0,0,0,.2);white-space:nowrap;' +
+      'opacity:0;transition:opacity .3s;pointer-events:none;';
+    document.body.appendChild(ut);
+  }
+  ut.innerHTML = '✅ Tersimpan &nbsp;' +
+    '<span id="_undoBtn" style="background:rgba(255,255,255,.25);border-radius:6px;' +
+    'padding:3px 10px;cursor:pointer;pointer-events:all" onclick="doUndo()">↩ Undo</span>';
+  ut.style.opacity = '1';
+  ut.style.pointerEvents = 'auto';
   clearTimeout(_undoToastTimer);
   _undoToastTimer = setTimeout(() => {
-    t.classList.remove('show');
-    t.style.background = '';
+    ut.style.opacity = '0';
+    ut.style.pointerEvents = 'none';
   }, 4000);
 }
 let _undoToastTimer = null;
@@ -954,6 +979,7 @@ let _undoToastTimer = null;
 async function doUndo() {
   if (_undoStack.length === 0) { showToast('Tidak ada yang bisa di-undo'); return; }
   const snap = _undoStack.pop();
+  _updateUndoBtn();
 
   // Restore in-memory data
   const gi = allData.findIndex(r => r.lokasi === snap.lokasi);
@@ -976,9 +1002,9 @@ async function doUndo() {
   renderGrid();
 
   // Hide undo toast
-  const t = document.getElementById('toast');
-  t.classList.remove('show');
   clearTimeout(_undoToastTimer);
+  const ut = document.getElementById('_undoToastEl');
+  if (ut) { ut.style.opacity='0'; ut.style.pointerEvents='none'; }
 
   // Save restored data to Google Sheet
   if (API_URL) {
@@ -997,6 +1023,77 @@ async function doUndo() {
   } else {
     showToast('↩️ Data dikembalikan (lokal)');
   }
+}
+
+function showUndoHistory() {
+  const list = document.getElementById('undoHistList');
+  const sub  = document.getElementById('undoHistSub');
+
+  if (_undoStack.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:.82rem">Belum ada riwayat edit.</div>';
+    sub.textContent = '';
+  } else {
+    sub.textContent = _undoStack.length + ' edit tersimpan (terbaru di atas)';
+    list.innerHTML = [..._undoStack].reverse().map((snap, i) => {
+      const realIdx = _undoStack.length - 1 - i; // index in stack
+      return `<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700;font-size:.8rem;color:var(--navy)">${snap.lokasi}</div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:2px">Sebelum edit${snap.lastUpdate ? ' · ' + snap.lastUpdate : ''}</div>
+        </div>
+        <button onclick="restoreSnap(${realIdx})" style="background:var(--navy);color:#fff;border:none;border-radius:7px;padding:7px 13px;font-family:inherit;font-weight:700;font-size:.75rem;cursor:pointer">↩️ Pulihkan</button>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('undoHistModal').classList.add('open');
+  history.pushState({page:'modal'},'',location.href);
+}
+
+function closeUndoHistory() {
+  document.getElementById('undoHistModal').classList.remove('open');
+}
+
+async function restoreSnap(idx) {
+  if (idx < 0 || idx >= _undoStack.length) return;
+  const snap = _undoStack[idx];
+  _undoStack.splice(idx, 1); // remove this snapshot from stack
+
+  // Restore in-memory
+  const gi = allData.findIndex(r => r.lokasi === snap.lokasi);
+  if (gi >= 0) {
+    allData[gi].rawRow     = snap.rawRow;
+    allData[gi].jamNormal  = snap.jamNormal;
+    allData[gi].jamMalam   = snap.jamMalam;
+    allData[gi].jamSibuk   = snap.jamSibuk;
+    allData[gi].dN         = snap.dN;
+    allData[gi].dS         = snap.dS;
+    allData[gi].allRed     = snap.allRed;
+    allData[gi].kuning     = snap.kuning;
+    allData[gi].lastUpdate = snap.lastUpdate;
+    if (currentSimpang && currentSimpang.lokasi === snap.lokasi) {
+      currentSimpang = allData[gi];
+      renderDetail();
+    }
+  }
+  filteredData = [...allData];
+
+  closeUndoHistory();
+  showToast('↩️ Data ' + snap.lokasi + ' dipulihkan!');
+
+  // Sync to Sheet
+  if (API_URL) {
+    try {
+      const res  = await fetch(API_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateRow',rowIndex:snap.rowIndex,rowData:snap.rawRow})});
+      const json = await res.json();
+      if (json.status !== 'ok') showToast('⚠️ Gagal sync ke Sheet', true);
+    } catch(e) { await saveViaJSONP(snap.rowIndex, snap.rawRow); }
+  }
+}
+
+// Show/hide undo history button based on stack
+function _updateUndoBtn() {
+  const btn = document.getElementById('undoHistBtn');
+  if (btn) btn.style.display = _undoStack.length > 0 ? 'flex' : 'none';
 }
 
 function saveApiUrl(){
@@ -1038,6 +1135,12 @@ window.addEventListener('popstate', function() {
   const editModal  = document.getElementById('editModal');
 
   // Close modals - replaceState only, no new pushState
+  const undoHistModal = document.getElementById('undoHistModal');
+  if (undoHistModal && undoHistModal.classList.contains('open')) {
+    closeUndoHistory();
+    history.replaceState({page:'home'},'',location.href);
+    return;
+  }
   if (passModal && passModal.classList.contains('open')) {
     closeEditPassModal();
     history.replaceState({ page: 'home' }, '', location.href);
