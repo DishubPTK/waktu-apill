@@ -484,14 +484,14 @@ function doPost(e) {
 
 <script src="password.js"></script>
 <script>
-// Password dimuat dari file password.js
-// Untuk mengganti password, edit file password.js di GitHub.
-let canEdit = false; // status: apakah user sudah login dengan password edit
+// Password dimuat dari password.js (lihat file tersebut untuk mengubah)
+let canEdit = false;
 const SPREADSHEET_ID='1QDzxQPXuKiYsnkxpLMxyyNXnzLQDLvnjCslZLQichN4';
 const MAX_SIBUK=8;
 const DEFAULT_API_URL='https://script.google.com/macros/s/AKfycbzI40pIb5qS3bGHbXLzRkRtL7LDuCECd9bGB3vq7H2hwk17uXSQlwLF9ahX-IL6r7Ex/exec';
 let API_URL=localStorage.getItem('apill_api_url')||DEFAULT_API_URL;
 let allData=[],filteredData=[],currentSimpang=null;
+let _undoStack=[]; // stores last edit snapshots
 
 function fmtTime(v){
   if(!v&&v!==0)return'';
@@ -811,6 +811,20 @@ function closeModal(){document.getElementById('editModal').classList.remove('ope
 
 async function saveEdit(){
   const d=currentSimpang,cm=d.cm;
+  // Save undo snapshot before overwriting
+  _undoStack.push({
+    lokasi: d.lokasi,
+    rowIndex: d.rowIndex,
+    rawRow: [...(d.rawRow||[])],
+    jamNormal: d.jamNormal, jamMalam: d.jamMalam,
+    jamSibuk: [...d.jamSibuk],
+    dN: [...d.dN],
+    dS: d.dS.map(a=>[...a]),
+    allRed: d.allRed, kuning: d.kuning,
+    lastUpdate: d.lastUpdate,
+    cm: d.cm
+  });
+  if (_undoStack.length > 10) _undoStack.shift(); // keep max 10
   const nr=[...(d.rawRow||[])];
   const set=(ci,v)=>{if(ci<0)return;while(nr.length<=ci)nr.push('');nr[ci]=v;};
   const cnt=parseInt(document.getElementById('editFormBody').dataset.cnt||'0');
@@ -918,6 +932,72 @@ function submitEditPass(){
 }
 
 
+
+// ── UNDO SYSTEM ──────────────────────────────────────────
+function _showUndoToast() {
+  if (_undoStack.length === 0) return;
+  const snap = _undoStack[_undoStack.length - 1];
+  const t = document.getElementById('toast');
+  t.innerHTML = '✅ Tersimpan &nbsp;<span onclick="doUndo()" style="text-decoration:underline;cursor:pointer;font-weight:800">Undo</span>';
+  t.className = 'toast';
+  t.style.background = 'var(--green)';
+  t.classList.add('show');
+  // Auto hide after 4s
+  clearTimeout(_undoToastTimer);
+  _undoToastTimer = setTimeout(() => {
+    t.classList.remove('show');
+    t.style.background = '';
+  }, 4000);
+}
+let _undoToastTimer = null;
+
+async function doUndo() {
+  if (_undoStack.length === 0) { showToast('Tidak ada yang bisa di-undo'); return; }
+  const snap = _undoStack.pop();
+
+  // Restore in-memory data
+  const gi = allData.findIndex(r => r.lokasi === snap.lokasi);
+  if (gi >= 0) {
+    allData[gi].rawRow     = snap.rawRow;
+    allData[gi].jamNormal  = snap.jamNormal;
+    allData[gi].jamMalam   = snap.jamMalam;
+    allData[gi].jamSibuk   = snap.jamSibuk;
+    allData[gi].dN         = snap.dN;
+    allData[gi].dS         = snap.dS;
+    allData[gi].allRed     = snap.allRed;
+    allData[gi].kuning     = snap.kuning;
+    allData[gi].lastUpdate = snap.lastUpdate;
+    if (currentSimpang && currentSimpang.lokasi === snap.lokasi) {
+      currentSimpang = allData[gi];
+      renderDetail();
+    }
+  }
+  filteredData = [...allData];
+  renderGrid();
+
+  // Hide undo toast
+  const t = document.getElementById('toast');
+  t.classList.remove('show');
+  clearTimeout(_undoToastTimer);
+
+  // Save restored data to Google Sheet
+  if (API_URL) {
+    try {
+      const res  = await fetch(API_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({action:'updateRow', rowIndex: snap.rowIndex, rowData: snap.rawRow})
+      });
+      const json = await res.json();
+      showToast(json.status==='ok' ? '↩️ Data dikembalikan!' : '↩️ Undo lokal (gagal sync)', json.status!=='ok');
+    } catch(e) {
+      await saveViaJSONP(snap.rowIndex, snap.rawRow);
+      showToast('↩️ Data dikembalikan!');
+    }
+  } else {
+    showToast('↩️ Data dikembalikan (lokal)');
+  }
+}
 
 function saveApiUrl(){
   const url=document.getElementById('apiUrlInput').value.trim();if(!url)return;
